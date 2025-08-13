@@ -1,9 +1,9 @@
 // Voorbeeld trainingsschema
 let trainingsSchema = JSON.parse(localStorage.getItem("trainingsSchema")) || [
-    { datum: "2025-08-14", type: "Duurloop", afstand: 10, tijd: 60, voltooid: false, notitie: "" },
-    { datum: "2025-08-16", type: "Interval", afstand: 8, tijd: 50, voltooid: false, notitie: "" },
-    { datum: "2025-08-18", type: "Herstel", afstand: 5, tijd: 40, voltooid: false, notitie: "" },
-    { datum: "2025-08-20", type: "Duurloop", afstand: 12, tijd: 70, voltooid: false, notitie: "" }
+    { datum: "2025-08-14", type: "Duurloop", afstand: 10, tijd: 60, voltooid: false, overgeslagen: false, notitie: "" },
+    { datum: "2025-08-16", type: "Interval", afstand: 8, tijd: 50, voltooid: false, overgeslagen: false, notitie: "" },
+    { datum: "2025-08-18", type: "Herstel", afstand: 5, tijd: 40, voltooid: false, overgeslagen: false, notitie: "" },
+    { datum: "2025-08-20", type: "Duurloop", afstand: 12, tijd: 70, voltooid: false, overgeslagen: false, notitie: "" }
 ];
 
 // Functie om data op te slaan
@@ -13,11 +13,12 @@ function saveData() {
 
 // Functie om dashboard bij te werken
 function updateDashboard() {
-    const next = trainingsSchema.find(t => !t.voltooid);
+    const next = trainingsSchema.find(t => !t.voltooid && !t.overgeslagen);
     document.getElementById("next-training-info").innerHTML = next ? 
         `${next.datum}: ${next.type}, ${next.afstand} km in ${next.tijd} min` : 
         "Geen trainingen gepland.";
 
+    // Alleen voltooide trainingen tellen voor voortgang
     const totalDistance = trainingsSchema.filter(t => t.voltooid).reduce((sum, t) => sum + t.afstand, 0);
     const totalCompleted = trainingsSchema.filter(t => t.voltooid).length;
 
@@ -27,11 +28,12 @@ function updateDashboard() {
     // Trainingslijst
     const listEl = document.getElementById("training-list");
     listEl.innerHTML = "";
-    trainingsSchema.slice(0,5).forEach((t, index) => {
+    trainingsSchema.slice(0, 5).forEach((t, index) => {
         const li = document.createElement("li");
+        li.style.opacity = t.overgeslagen ? 0.5 : 1;
         li.innerHTML = `${t.datum}: ${t.type}, ${t.afstand} km 
-                        <button class="complete" onclick="completeTraining(${index})">Voltooid</button>
-                        <button class="skip" onclick="skipTraining(${index})">Overslaan</button>
+                        <button class="complete" onclick="completeTraining(${index})" ${t.overgeslagen ? "disabled" : ""}>Voltooid</button>
+                        <button class="skip" onclick="skipTraining(${index})" ${t.overgeslagen ? "disabled" : ""}>Overslaan</button>
                         <input class="notitie" type="text" placeholder="Notitie" 
                                value="${t.notitie}" onchange="addNote(${index}, this.value)">`;
         listEl.appendChild(li);
@@ -42,13 +44,30 @@ function updateDashboard() {
 
 // Functies voor interactie
 function completeTraining(index) {
-    trainingsSchema[index].voltooid = true;
-    saveData();
-    updateDashboard();
+    if (!trainingsSchema[index].overgeslagen) {
+        trainingsSchema[index].voltooid = true;
+        saveData();
+        updateDashboard();
+    }
 }
 
 function skipTraining(index) {
-    trainingsSchema[index].voltooid = true; // markeer als voltooid
+    const skipped = trainingsSchema[index];
+    skipped.overgeslagen = true;
+
+    // Nieuwe training genereren
+    const nieuweDatum = getNextDate(skipped.datum, 2); // 2 dagen later
+    const nieuweTraining = {
+        datum: nieuweDatum,
+        type: getNextTrainingType(skipped.type),
+        afstand: skipped.afstand, //zelfde afstand, kan aangepast worden
+        tijd: skipped.tijd,
+        voltooid: false,
+        overgeslagen: false,
+        notitie: ""
+    };
+
+    trainingsSchema.push(nieuweTraining);
     saveData();
     updateDashboard();
 }
@@ -58,12 +77,25 @@ function addNote(index, note) {
     saveData();
 }
 
+// Hulpfuncties
+function getNextDate(dateStr, dagen) {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + dagen);
+    return date.toISOString().split('T')[0];
+}
+
+function getNextTrainingType(huidigType) {
+    const types = ["Duurloop", "Interval", "Herstel"];
+    let index = types.indexOf(huidigType);
+    return types[(index + 1) % types.length];
+}
+
 // Grafiek
 let chart;
 function updateChart() {
     const ctx = document.getElementById('distanceChart').getContext('2d');
     const labels = trainingsSchema.map(t => t.datum);
-    const data = trainingsSchema.map(t => t.voltooid ? t.afstand : 0);
+    const data = trainingsSchema.map(t => t.voltooid ? t.afstand : 0); // alleen voltooide trainingen
 
     if(chart) chart.destroy();
     chart = new Chart(ctx, {
