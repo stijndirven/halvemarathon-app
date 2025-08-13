@@ -12,11 +12,66 @@ function saveData() {
 }
 
 // Functie om dashboard bij te werken
-function updateDashboard() {
+function updateNextTraining() {
     const next = trainingsSchema.find(t => !t.voltooid && !t.overgeslagen);
-    document.getElementById("next-training-info").innerHTML = next ? 
-        `${next.datum}: ${next.type}, ${next.afstand} km in ${next.tijd} min` : 
-        "Geen trainingen gepland.";
+    const infoEl = document.getElementById("next-training-info");
+    
+    const completeBtn = document.getElementById("complete-btn");
+    const skipBtn = document.getElementById("skip-btn");
+    const noteInput = document.getElementById("note-input");
+
+    if(next) {
+        infoEl.textContent = `${next.datum}: ${next.type}, ${next.afstand} km in ${next.tijd} min`;
+        infoEl.style.color = "blue";
+
+        completeBtn.disabled = false;
+        skipBtn.disabled = false;
+        noteInput.value = next.notitie || "";
+
+        // Knoppen event handlers
+        completeBtn.onclick = () => {
+            next.voltooid = true;
+            saveData();
+            updateNextTraining();
+        };
+
+        skipBtn.onclick = () => {
+            next.overgeslagen = true;
+
+            // Nieuwe training genereren
+            const nieuweDatum = getNextDate(next.datum, 2);
+            const nieuweTraining = {
+                datum: nieuweDatum,
+                type: getNextTrainingType(next.type),
+                afstand: next.afstand,
+                tijd: next.tijd,
+                voltooid: false,
+                overgeslagen: false,
+                notitie: ""
+            };
+            trainingsSchema.push(nieuweTraining);
+
+            saveData();
+            updateNextTraining();
+        };
+
+        noteInput.onchange = (e) => {
+            next.notitie = e.target.value;
+            saveData();
+        };
+
+    } else {
+        infoEl.textContent = "Geen trainingen gepland.";
+        infoEl.style.color = "black";
+        completeBtn.disabled = true;
+        skipBtn.disabled = true;
+        noteInput.value = "";
+    }
+}
+
+// Initialiseer
+updateNextTraining();
+
 
     // Alleen voltooide trainingen tellen voor voortgang
     const totalDistance = trainingsSchema.filter(t => t.voltooid).reduce((sum, t) => sum + t.afstand, 0);
